@@ -85,12 +85,24 @@ function saveAdminPoints(adminid, activity, points)
     adminpointhistory.point = points; 
     adminpointhistory.activity = activity; 
     adminpointhistory.date = Date.now(); 
-    
-    adminpointhistory.save(function(err, data) {
-        if (err)
-            res.send(err);
 
-        return "Saved";
+    Admin.findById(adminid).exec()
+        .then(function(data){
+            
+            adminpointhistory.save(function(err, result) {
+                if (err)
+                    res.send(err);
+            });
+
+            var updatepoints = parseInt(data.points) + parseInt(points);                                    
+            console.log("updated :" + updatepoints);
+            Admin.findOneAndUpdate({ _id: adminid }, {
+                $set: {
+                    "admin.points": updatepoints
+                }
+            }, { new: true }, function(err, a) {
+                console.log(a);            
+            }); 
     });
 
 }
@@ -113,15 +125,27 @@ function saveAudit(activity, date, adminid )
 }
 
 router.route('/search/activity')    
-    .post(function(req, res) {
+    .post(function(req, res){
 
-       var type = req.body.activitytype;
-
-       if (req.params.id) {
-            Activity.find({ activitytype: type }, function (err, docs) {
-                res.json(docs);
-            });
-       }
+        var type = req.body.activitytype;
+        var province = req.body.province;
+        var district = req.body.district;
+        var area = req.body.area;
+       
+        Activity.find({ activitytype: { $in: type } })
+                .populate({
+                    path: 'persons',
+                    match: { "person.province": { $in: province },
+                             "person.district": { $in: district },
+                             "person.area": { $in: area }}
+                }).exec()
+                .then(function(data){                    
+                    res.json(data);
+                })
+                .catch(function(err){ 
+                    res.json(err);
+                });                  
+        
     });
 
 
@@ -166,6 +190,40 @@ router.route('/point/:adminid')
         });
 
     });
+
+
+router.route('/pointadmin/:adminid')
+    // create a point 
+    .post(function(req, res) {
+
+        var point = new Point();      
+        point.users = req.body.users;
+        point.province = req.body.province; 
+        point.area = req.body.area;  
+        point.district = req.body.district;
+        point.points = req.body.points;  
+
+        loadAdminPoints();
+
+        point.save(function(err, data) {
+            if (err)
+                res.send(err);
+            console.log("saveAdminPoints 1:" + addPointPointsAdmin);
+
+            saveAdminPoints(req.params.adminid, "Point added" , addPointPointsAdmin);
+
+            saveAudit("Point added", Date.now(), req.params.adminid);
+
+            for (var i = 0, len = point.users.length; i < len; i++) {
+                console.log("saveAdminPoints:" + data.points);
+                saveAdminPoints(point.users[i], "Point added" , data.points);
+            }
+
+            res.json(data);
+        });
+
+    });
+
 
 router.route('/point')
     .get(function(req, res) {
@@ -559,30 +617,19 @@ router.route('/person/:id')
         });
     });
 
-router.route('/person/:id')
+router.route('/person/:id/:adminid')
     .delete(function(req, res) {
         Person.remove({
             _id: req.params.id
         }, function(err, person) {
             if (err)
                 res.send(err);
+            
+            saveAudit("Person deleted", Date.now(), req.params.adminid);
+            
             res.json({ message: 'Successfully deleted' });
     });
 });
-
-router.route('/person/:id')
-    .delete(function(req, res) {
-
-        Person.remove({
-            _id: req.params.id
-        }, function(err, person) {
-            if (err)
-                res.send(err);
-
-            res.json({ message: 'Successfully deleted' });
-        });
-
-    });
 
 router.route('/formfield/add')
 
@@ -613,7 +660,7 @@ router.route('/formfield/add')
 
 router.route('/formfield/:formname')
 
-    // create a bear (accessed at POST http://localhost:8080/api/bears)
+    
     .get(function(req, res) {
 
        if (req.params.formname) {
@@ -627,7 +674,7 @@ router.route('/formfield/:formname')
     });
 
 router.route('/formfieldByID/:id')
-    // create a bear (accessed at POST http://localhost:8080/api/bears)
+    
     .get(function(req, res) {
        if (req.params.id) {
             Formfield.findById(req.params.id, function (err, docs) {
@@ -718,7 +765,7 @@ router.route('/admin/login')
 });
 
 
-router.route('/admin')
+router.route('/admin/:adminid')
     // create a person 
     .post(function(req, res) {
 
@@ -727,6 +774,8 @@ router.route('/admin')
         admin.save(function(err, data) {
             if (err)
                 res.send(err);
+
+            saveAudit("Admin added", Date.now(), req.params.adminid);
 
             res.json(data);
         });
@@ -743,7 +792,7 @@ router.route('/admin')
     });
 
 router.route('/admin/:id')
-    // create a bear (accessed at POST http://localhost:8080/api/bears)
+    
     .get(function(req, res) {
 
        if (req.params.id) {
@@ -755,7 +804,7 @@ router.route('/admin/:id')
 
 router.route('/admin/:id')
     .put(function(req, res) {
-        // use our bear model to find the bear we want
+        
         Admin.findById(req.params.id, function(err, admin) {
 
             if (err)
@@ -774,7 +823,7 @@ router.route('/admin/:id')
         });
     });
 
-router.route('/admin/:id')
+router.route('/admin/:id/:adminid')
     .delete(function(req, res) {
 
         Admin.remove({
@@ -782,6 +831,8 @@ router.route('/admin/:id')
         }, function(err, admin) {
             if (err)
                 res.send(err);
+            
+            saveAudit("Admin deleted", Date.now(), req.params.adminid);
 
             res.json({ message: 'Successfully deleted' });
         });
@@ -861,7 +912,7 @@ router.route('/activity')
 
 
 router.route('/activity/:person')
-    // create a bear (accessed at POST http://localhost:8080/api/bears)
+    
     .get(function(req, res) {
 
        if (req.params.id) {
@@ -873,7 +924,7 @@ router.route('/activity/:person')
 
 router.use(fileUpload());
 router.route('/activityById/:id')
-   // create a bear (accessed at POST http://localhost:8080/api/bears)
+   
     .get(function(req, res) {
 
        if (req.params.id) {
@@ -885,7 +936,7 @@ router.route('/activityById/:id')
 
 
 
-router.route('/activity/:id')
+router.route('/activity/:id/:adminid')
     .delete(function(req, res) {
 
         Activity.remove({
@@ -893,6 +944,8 @@ router.route('/activity/:id')
         }, function(err, point) {
             if (err)
                 res.send(err);
+            
+            saveAudit("Activity deleted", Date.now(), req.params.adminid);
 
             res.json({ message: 'Successfully deleted' });
         });
