@@ -159,6 +159,17 @@ router.route('/audit/')
 
     });
 
+    
+router.route('/person/district/:fieldname')
+    .get(function(req, res) {
+
+        var fieldname = "person." +  req.params.fieldname;
+        Person.distinct(fieldname).exec(function(err, data){
+            res.json(data);            
+        });
+
+    });
+
 router.route('/audit/:adminid')
     .get(function(req, res) {
 
@@ -1115,7 +1126,9 @@ router.route('/activity/:id/:adminid')
     });
 
 app.use(fileUpload());
- 
+
+var cloudinary = require('cloudinary');
+
 router.route('/upload')
 
     .post(function(req, res) {
@@ -1135,7 +1148,16 @@ router.route('/upload')
             {
                 return res.status(500).send(err);
             }
-            res.send('/uploads/' + filename);
+            var filepath = appRoot + '/public/uploads/' + filename;
+            cloudinary.config({ 
+                cloud_name: 'de1kv7mee', 
+                api_key: '927217785294547', 
+                api_secret: 'uFc_KOuGzdWHfqJSkr-NfQLBP00' 
+            });
+            cloudinary.uploader.upload(filepath, function(result) { 
+                console.log(result); 
+                res.send(result.url);             
+            });
         });        
 });
 module.exports = router;
