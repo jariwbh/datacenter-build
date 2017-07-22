@@ -13,7 +13,7 @@
   },
   "license": "MIT",
   "scripts": {
-    "serve-api": "node server.js"
+    "start": "node server.js"
   },
   "private": true,
   "dependencies": {
